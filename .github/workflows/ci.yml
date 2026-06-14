@@ -20,17 +20,14 @@ jobs:
           java-version: '21'
           cache: maven
 
-      - name: Make mvnw executable
-        run: chmod +x ./mvnw
-
-      - name: Show Maven wrapper version
-        run: ./mvnw -B -v
+      - name: Verify Maven
+        run: mvn -v
 
       - name: Build (no tests)
-        run: ./mvnw -B clean package -DskipTests
+        run: mvn -B clean package -DskipTests
 
       - name: Run tests (Testcontainers)
-        run: ./mvnw -B test
+        run: mvn -B test
 
       - name: Upload Surefire reports
         if: always()
