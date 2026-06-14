@@ -1,0 +1,51 @@
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: adgili-postgres
+    environment:
+      POSTGRES_DB: adgili
+      POSTGRES_USER: adgili
+      POSTGRES_PASSWORD: adgili
+    ports:
+      - "5432:5432"
+    volumes:
+      - adgili-pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U adgili -d adgili"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: adgili-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: .
+    container_name: adgili-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      DATABASE_URL: jdbc:postgresql://postgres:5432/adgili
+      DATABASE_USERNAME: adgili
+      DATABASE_PASSWORD: adgili
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: dev-secret-change-me-this-must-be-at-least-32-bytes-long-ok
+      CORS_ALLOWED_ORIGINS: http://localhost:3000,http://localhost:8080
+      PORT: "8080"
+    ports:
+      - "8080:8080"
+
+volumes:
+  adgili-pg-data:
