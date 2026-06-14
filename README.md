@@ -26,13 +26,13 @@ This MVP ships with **stubs** for email, SMS, identity verification, and payment
 | Docs | springdoc-openapi (Swagger UI) |
 | Mapping | MapStruct, Jackson |
 | Testing | JUnit 5, Testcontainers (real PostGIS) |
-| Build | Gradle 8.10 (Kotlin DSL) |
+| Build | Maven 3.9 (with Maven wrapper) |
 
 ---
 
 ## Quick start (local)
 
-### Option A: Docker Compose (easiest)
+### Option A: Docker Compose (easiest, no Java needed locally)
 
 ```bash
 docker compose up --build
@@ -49,21 +49,28 @@ Open:
 # 1. Only start Postgres + Redis
 docker compose up -d postgres redis
 
-# 2. Run the app (Gradle wrapper needs to exist — see note below)
-./gradlew bootRun --args='--spring.profiles.active=dev'
+# 2. Run the app
+./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
-### Gradle wrapper note
+### Maven wrapper
 
-The project includes `gradle/wrapper/gradle-wrapper.properties` and the `gradlew` scripts, but **does not include `gradle-wrapper.jar`** (not distributable via this channel). First time you clone, run **one** of:
+The project includes `mvnw`, `mvnw.cmd`, and `.mvn/wrapper/` so you can build without installing Maven globally. If for some reason the wrapper is missing, regenerate it with:
 
 ```bash
-# If you have Gradle 8.10+ installed globally:
-gradle wrapper --gradle-version 8.10.2
-
-# Or use the Docker build path (the Dockerfile regenerates it):
-docker compose up --build
+mvn wrapper:wrapper -Dmaven=3.9.9
 ```
+
+Common Maven commands:
+
+| Task | Command |
+|---|---|
+| Run the app | `./mvnw spring-boot:run` |
+| Build a jar | `./mvnw clean package` |
+| Build without tests | `./mvnw clean package -DskipTests` |
+| Run tests only | `./mvnw test` |
+
+The packaged jar lands at `target/adgili-backend.jar`.
 
 ---
 
@@ -211,25 +218,33 @@ curl -s "http://localhost:8080/api/v1/search/listings?district=Vake" \
 ## Project structure
 
 ```
-src/main/java/li/adgi/api/
-├── AdgiliApplication.java
-├── admin/          — admin dashboard, user suspend, audit viewer
-├── audit/          — AuditLog (JSONB), REQUIRES_NEW service
-├── auth/           — register/login/refresh/verify, OtpStore, TokenStore
-├── common/         — BaseEntity, ApiException, GlobalExceptionHandler, GeoUtil, PageResponse
-├── config/         — JwtProperties, FeatureFlags, OpenApiConfig, DevDataSeeder
-├── listing/        — Listing + Photo/Feature/Rules, state machine, moderation
-├── notification/   — stubbed email/SMS/in-app dispatch, in-app feed
-├── search/         — native PostGIS queries with ST_DWithin + ST_Distance
-├── security/       — JwtService, JwtAuthenticationFilter, SecurityConfig, CurrentUser
-├── user/           — User, UserProfile, HostProfile, RenterProfile
-└── verification/   — identity submission, async auto-approve, admin review
-
-src/main/resources/
-├── application.properties        — base config
-├── application-dev.properties    — dev profile (seed data active)
-├── application-prod.properties   — prod overrides
-└── db/migration/                 — V1..V4 Flyway migrations
+adgili-backend/
+├── pom.xml                       — Maven build
+├── Dockerfile                    — multi-stage build (Maven → JRE 21)
+├── docker-compose.yml            — local stack (api + postgres + redis)
+├── railway.json                  — Railway deploy config
+├── mvnw, mvnw.cmd                — Maven wrapper scripts
+├── .mvn/wrapper/                 — wrapper config
+└── src/
+    ├── main/java/li/adgi/api/
+    │   ├── AdgiliApplication.java
+    │   ├── admin/          — admin dashboard, user suspend, audit viewer
+    │   ├── audit/          — AuditLog (JSONB), REQUIRES_NEW service
+    │   ├── auth/           — register/login/refresh/verify, OtpStore, TokenStore
+    │   ├── common/         — BaseEntity, ApiException, GlobalExceptionHandler, GeoUtil
+    │   ├── config/         — JwtProperties, FeatureFlags, OpenApiConfig, DevDataSeeder
+    │   ├── listing/        — Listing + Photo/Feature/Rules, state machine, moderation
+    │   ├── notification/   — stubbed email/SMS/in-app dispatch, in-app feed
+    │   ├── search/         — native PostGIS queries with ST_DWithin + ST_Distance
+    │   ├── security/       — JwtService, JwtAuthenticationFilter, SecurityConfig
+    │   ├── user/           — User, UserProfile, HostProfile, RenterProfile
+    │   └── verification/   — identity submission, async auto-approve, admin review
+    ├── main/resources/
+    │   ├── application.properties        — base config
+    │   ├── application-dev.properties    — dev profile (seed data active)
+    │   ├── application-prod.properties   — prod overrides
+    │   └── db/migration/                 — V1..V4 Flyway migrations
+    └── test/java/                — Testcontainers integration tests
 ```
 
 ---
@@ -260,35 +275,36 @@ Feature flags (stubs, all `true` by default):
 
 ## Deploying to Railway
 
-1. **Create a new Railway project** and connect this repo.
-2. **Add a PostgreSQL plugin** — Railway provisions a managed Postgres instance. Click "Connect" on the Postgres service and copy the `DATABASE_URL`.
-3. **Enable PostGIS on the database.** In the Railway Postgres shell:
+1. **Create a new Railway project** and connect this repo (or push from GitHub).
+2. **Add a PostgreSQL plugin** — Railway provisions a managed Postgres instance.
+3. **Enable PostGIS on the database.** In the Railway Postgres query tab:
    ```sql
    CREATE EXTENSION IF NOT EXISTS postgis;
    CREATE EXTENSION IF NOT EXISTS pgcrypto;
    CREATE EXTENSION IF NOT EXISTS citext;
    ```
-   (Flyway's V1 migration will also run these, but running them as superuser first avoids permission issues on some managed Postgres instances.)
+   (Flyway's V1 migration also runs these, but enabling them as superuser first avoids permission issues on managed Postgres.)
 4. **Environment variables on the API service:**
-   - `SPRING_PROFILES_ACTIVE=prod` (or `prod,seed` if you want the seed data on first deploy)
+   - `SPRING_PROFILES_ACTIVE=prod` (or `prod,seed` for seed data on first deploy)
    - `JWT_SECRET=<generate a 48+ byte random string>`
-   - `DATABASE_URL=<copy from the Postgres plugin>`
-   - `DATABASE_USERNAME` / `DATABASE_PASSWORD` (from the Postgres plugin)
+   - `DATABASE_URL=jdbc:postgresql://${{Postgres.PGHOST}}:${{Postgres.PGPORT}}/${{Postgres.PGDATABASE}}`
+   - `DATABASE_USERNAME=${{Postgres.PGUSER}}`
+   - `DATABASE_PASSWORD=${{Postgres.PGPASSWORD}}`
    - `CORS_ALLOWED_ORIGINS=https://your-frontend.com`
-5. **Deploy** — Railway uses the `Dockerfile` and `railway.json` automatically. First deploy takes ~4 minutes (dependency download + build).
+5. **Deploy** — Railway uses the `Dockerfile` and `railway.json` automatically. First deploy takes ~3-4 minutes (Maven dependency download + build).
 6. **Verify** — hit `https://<your-app>.up.railway.app/actuator/health` and `/swagger-ui.html`.
 
 ### Recommended demo setup on Railway
 
-- Use `SPRING_PROFILES_ACTIVE=prod,seed` so the seed loads once, then **remove `seed` from the profiles** after first deploy.
-- Set `JWT_SECRET` once and don't rotate it during the demo (would invalidate tokens).
+- Use `SPRING_PROFILES_ACTIVE=prod,seed` so the seed loads on first deploy. The seeder is idempotent (skips if users table is non-empty), so you can leave `seed` on or remove it after the first run — either works.
+- Set `JWT_SECRET` once and don't rotate it during the demo (would invalidate all tokens).
 
 ---
 
 ## Running the tests
 
 ```bash
-./gradlew test
+./mvnw test
 ```
 
 Testcontainers spins up a real PostGIS 16 container for each test run. Requires Docker running locally. `AuthFlowIntegrationTest` covers:
