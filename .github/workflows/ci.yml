@@ -10,7 +10,6 @@ jobs:
   build:
     name: Build & Test
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
@@ -19,28 +18,28 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Generate Gradle wrapper (if missing)
-        run: |
-          if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
-            gradle wrapper --gradle-version 8.10.2
-          fi
+          cache: maven
 
       - name: Build (no tests)
-        run: ./gradlew --no-daemon build -x test
+        run: ./mvnw -B --no-transfer-progress clean package -DskipTests
 
       - name: Run tests (Testcontainers)
-        run: ./gradlew --no-daemon test
+        run: ./mvnw -B --no-transfer-progress test
 
-      - name: Upload test reports
+      - name: Upload Surefire reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-reports
-          path: build/reports/tests/test/
+          name: surefire-reports
+          path: target/surefire-reports/
+          retention-days: 7
+
+      - name: Upload built jar
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: adgili-backend-jar
+          path: target/adgili-backend.jar
           retention-days: 7
 
   docker-build:
@@ -49,5 +48,6 @@ jobs:
     needs: build
     steps:
       - uses: actions/checkout@v4
+
       - name: Docker build
         run: docker build -t adgili-api:ci .
