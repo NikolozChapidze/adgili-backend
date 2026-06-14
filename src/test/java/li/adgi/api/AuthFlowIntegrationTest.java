@@ -13,6 +13,8 @@ import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.*;
 import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.http.client.ClientHttpResponse;
+import org.springframework.web.client.ResponseErrorHandler;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.util.List;
@@ -26,6 +28,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 class AuthFlowIntegrationTest {
 
     @Autowired TestRestTemplate rest;
+
+    @BeforeEach
+    void configureClient() {
+        // Use JDK HttpClient (JDK 11+) instead of legacy HttpURLConnection,
+        // which throws HttpRetryException on 401 in streaming mode.
+        rest.getRestTemplate().setRequestFactory(
+            new org.springframework.http.client.JdkClientHttpRequestFactory());
+        // Also don't throw on 4xx so we can assert on the status code directly.
+        rest.getRestTemplate().setErrorHandler(new ResponseErrorHandler() {
+            @Override public boolean hasError(ClientHttpResponse r) { return false; }
+            @Override public void handleError(ClientHttpResponse r) {}
+        });
+    }
     @Autowired NotificationRepository notifications;
     @Autowired JdbcTemplate jdbc;
 
