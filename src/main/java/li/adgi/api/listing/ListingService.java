@@ -342,6 +342,12 @@ public class ListingService {
     }
 
     @Transactional(readOnly = true)
+    public ListingDtos.ListingDetail getDetailForHost(UUID listingId, UUID hostUserId) {
+        Listing l = requireOwned(listingId, hostUserId);
+        return toDetail(l, true);
+    }
+
+    @Transactional(readOnly = true)
     public org.springframework.data.domain.Page<Listing> listForHost(UUID hostUserId, Pageable pageable) {
         return listings.findByHostUserId(hostUserId, pageable);
     }
