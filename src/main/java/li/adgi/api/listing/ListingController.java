@@ -48,6 +48,12 @@ public class ListingController {
         return PageResponse.of(result).map(l -> service.toDetail(l, true));
     }
 
+    @GetMapping("/api/v1/host/listings/{listingId}")
+    @Operation(summary = "Get own listing detail (includes exact location)")
+    public ListingDtos.ListingDetail getOwn(@PathVariable UUID listingId) {
+        return service.getDetailForHost(listingId, currentUser.get().userId());
+    }
+
     @PatchMapping("/api/v1/host/listings/{listingId}")
     @Operation(summary = "Update own listing (LIVE listings go back to PENDING_REVIEW)")
     public ListingDtos.ListingDetail update(
