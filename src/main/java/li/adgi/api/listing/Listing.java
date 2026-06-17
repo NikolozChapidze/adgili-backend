@@ -129,4 +129,8 @@ public class Listing extends BaseEntity {
 
     @Column(name = "published_at")
     private Instant publishedAt;
+
+    @Builder.Default
+    @Column(name = "currently_rented", nullable = false)
+    private Boolean currentlyRented = false;
 }
