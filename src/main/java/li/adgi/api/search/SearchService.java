@@ -28,7 +28,7 @@ public class SearchService {
     public PageResponse<ListingDtos.ListingSummary> search(SearchDtos.SearchQuery q) {
         // Build SQL dynamically for simplicity in MVP. Parameters are bound, never concatenated.
         StringBuilder where = new StringBuilder(
-            "l.listing_status = 'LIVE' AND l.moderation_status = 'APPROVED'");
+            "l.listing_status = 'LIVE' AND l.moderation_status = 'APPROVED' AND l.currently_rented = FALSE");
         Map<String, Object> params = new LinkedHashMap<>();
 
         if (q.district() != null && !q.district().isBlank()) {
